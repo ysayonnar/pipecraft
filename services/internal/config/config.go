@@ -10,7 +10,8 @@ import (
 const DEFAULT_CONFIG_PATH = "config.yml"
 
 type Config struct {
-	Port int `yaml:"port"`
+	Port    int  `yaml:"port"`
+	IsDebug bool `yaml:"is_debug"`
 }
 
 func MustParse() *Config {
