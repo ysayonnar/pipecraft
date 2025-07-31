@@ -1,5 +1,5 @@
 # build
-FROM golang:1.24.2 AS builder
+FROM golang:1.24.5 AS builder
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ COPY go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o app cmd/main
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o app cmd/main.go
 
 # final
 FROM alpine:latest
