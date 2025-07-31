@@ -1,9 +1,19 @@
 package main
 
-import "pipecraft/internal/config"
+import (
+	"log/slog"
+	"pipecraft/internal/config"
+	"pipecraft/internal/logger"
+)
+
+const DEBUG = true
 
 func main() {
-	cfg := config.MustParse()
+	logger.BuildLogger(DEBUG)
 
-	_ = cfg
+	cfg := config.MustParse()
+	slog.Info("config parsed", slog.Any("config", cfg))
+
+	for {
+	}
 }
