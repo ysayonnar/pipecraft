@@ -2,8 +2,14 @@ package app
 
 import (
 	"log/slog"
+	"os"
+	"os/signal"
 	"pipecraft/internal/config"
+	"pipecraft/internal/handlers"
+	"pipecraft/internal/server"
+	"pipecraft/internal/services"
 	"pipecraft/internal/storage"
+	"syscall"
 )
 
 type App struct {
@@ -15,15 +21,22 @@ func New(cfg *config.Config) *App {
 }
 
 func (app *App) Run() {
-	s := storage.MustInit()
-
-	_ = s
-
+	storage := storage.MustInit()
 	slog.Info("Database connected")
 
-	// TODO: инициализировать сервисы для БИЗНЕС-ЛОГИКИ!!!
+	service := services.New(storage)
+	handlers := handlers.New(service)
+	server := server.New(handlers)
 
-	// TODO: иницилизировать хендлеры
+	go server.Listen(app.Config.Port)
 
-	// TODO: инициализировать и поднять сервер
+	// Graceful shutdown
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
+	sign := <-stop
+
+	slog.Info("Graceful shutdown application...", slog.String("signal", sign.String()))
+
+	//TODO: проверять, есть ли не закрытые контейнеры
+	storage.Db.Close()
 }
