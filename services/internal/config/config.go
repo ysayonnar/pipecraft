@@ -9,9 +9,15 @@ import (
 
 const DEFAULT_CONFIG_PATH = "config.yml"
 
+type Http struct {
+	Port         int `yaml:"port"`
+	ReadTimeout  int `yaml:"read_timeout"`
+	WriteTimeout int `yaml:"write_timeout"`
+}
+
 type Config struct {
-	Port    int  `yaml:"port"`
 	IsDebug bool `yaml:"is_debug"`
+	Http    Http `yaml:"http"`
 }
 
 func MustParse() *Config {

@@ -28,8 +28,8 @@ func (app *App) Run() {
 	handlers := handlers.New(service)
 	server := server.New(handlers)
 
-	slog.Info("server listening", slog.Int("port", app.Config.Port))
-	go server.Listen(app.Config.Port)
+	slog.Info("server listening", slog.Int("port", app.Config.Http.Port))
+	go server.Listen(app.Config.Http)
 
 	// Graceful shutdown
 	stop := make(chan os.Signal, 1)

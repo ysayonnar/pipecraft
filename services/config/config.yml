@@ -1,2 +1,5 @@
-port: 80
 is_debug: true
+http:
+  port: 80
+  read_timeout: 1
+  write_timeout: 1
