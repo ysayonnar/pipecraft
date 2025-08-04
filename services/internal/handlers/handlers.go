@@ -15,6 +15,7 @@ func New(s *services.Service) *Handlers {
 	return &Handlers{Service: s}
 }
 
+// TODO: check if pipeline exists by commit, repo, branch and image
 func (h *Handlers) RunPipeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -24,6 +25,7 @@ func (h *Handlers) RunPipeline(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "RUN PIPELINE")
 }
 
+// TODO: REDIS caching for 5-10 seconds
 func (h *Handlers) PipelineStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -41,6 +43,7 @@ func (h *Handlers) PipelineStatus(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "STATUS pipeline_id: %s", pipelineId)
 }
 
+// TODO: REDIS caching for 5-10 seconds
 func (h *Handlers) PipelineLogs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)

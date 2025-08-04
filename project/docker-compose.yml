@@ -3,7 +3,7 @@ services:
     build:
       context: ./../services
       dockerfile: ./../services/Dockerfile
-    restart: always
+    # restart: always
     ports:
       - "8080:80"
     healthcheck:
