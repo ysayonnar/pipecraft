@@ -8,7 +8,6 @@ type RunPipelineRequest struct {
 	RepositoryUrl string `json:"repository_url"`
 	Branch        string `json:"branch"`
 	Commit        string `json:"commit,omitempty"`
-	Image         string `json:"image"`
 }
 
 type RunPipelineResponse struct {
@@ -21,8 +20,9 @@ type PipelineStatusResponse struct {
 
 type Logs struct {
 	LogsId        int64  `json:"logs_id"`
-	Command       string `json:"command_name"`
 	CommandNumber int    `json:"command_number"`
+	CommandName   string `json:"command_name"`
+	Command       string `json:"command"`
 	Results       string `json:"results"`
 	FinalStatus   string `json:"final_status"`
 	PipelineId    int64  `json:"pipeline_id"`

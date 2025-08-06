@@ -6,13 +6,10 @@ services:
     # restart: always
     ports:
       - "8080:80"
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     environment:
       DSN: "host=app-postgres port=5432 user=postgres password=password dbname=pipecraft sslmode=disable timezone=UTC connect_timeout=5"
+    depends_on:
+      - migrate
 
   app-postgres:
     image: 'postgres:14.0'
@@ -26,3 +23,11 @@ services:
     volumes: 
       - ./db-data/app-postgres/:/var/lib/postgresql/data
 
+  migrate:
+    image: migrate/migrate
+    volumes:
+      - ./../services/migrations:/migrations
+    entrypoint: ["migrate"]
+    command: ["-path", "/migrations", "-database", "postgres://postgres:password@app-postgres:5432/pipecraft?sslmode=disable", "up"]
+    depends_on:
+      - app-postgres
