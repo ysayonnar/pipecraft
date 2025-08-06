@@ -3,8 +3,11 @@ package handlers
 import (
 	"fmt"
 	"github.com/gorilla/mux"
+	"log/slog"
 	"net/http"
+	"pipecraft/internal/logger"
 	"pipecraft/internal/services"
+	"strconv"
 )
 
 type Handlers struct {
@@ -26,7 +29,6 @@ func (h *Handlers) RunPipeline(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "RUN PIPELINE")
 }
 
-// TODO: REDIS caching for 5-10 seconds
 func (h *Handlers) PipelineStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -34,17 +36,29 @@ func (h *Handlers) PipelineStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := mux.Vars(r)
-
-	pipelineId, ok := params["id"]
+	strPipelineId, ok := params["id"]
 	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	pipelineId, err := strconv.ParseInt(strPipelineId, 10, 64)
+	if err != nil {
+		slog.Error("error while parsing pipelineId to int", logger.Err(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	fmt.Fprintf(w, "STATUS pipeline_id: %s", pipelineId)
+	cachedResponse := h.RedisService.GetPipelineStatus(pipelineId)
+	if cachedResponse != "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(cachedResponse))
+		return
+	}
+
+	//TODO: cache response - redis
 }
 
-// TODO: REDIS caching for 5-10 seconds
 func (h *Handlers) PipelineLogs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -52,12 +66,25 @@ func (h *Handlers) PipelineLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := mux.Vars(r)
-
-	pipelineId, ok := params["id"]
+	strPipelineId, ok := params["id"]
 	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	pipelineId, err := strconv.ParseInt(strPipelineId, 10, 64)
+	if err != nil {
+		slog.Error("error while parsing pipelineId to int", logger.Err(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	fmt.Fprintf(w, "LOGS pipeline_id: %s", pipelineId)
+	cachedResponse := h.RedisService.GetPipelineLogs(pipelineId)
+	if cachedResponse != "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(cachedResponse))
+		return
+	}
+
+	//TODO: cache response - redis
 }

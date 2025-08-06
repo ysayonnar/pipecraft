@@ -2,7 +2,12 @@ package services
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/redis/go-redis/v9"
+	"log/slog"
+	"pipecraft/internal/logger"
+	"time"
 )
 
 type RedisService struct {
@@ -29,4 +34,27 @@ func NewRedisService() *RedisService {
 
 func (r *RedisService) Close() {
 	r.client.Close()
+}
+
+func (r *RedisService) getStringByKey(key string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	data, err := r.client.Get(ctx, key).Result()
+	if err != nil {
+		if !errors.Is(err, redis.Nil) {
+			slog.Error("error while getting data from redis", logger.Err(err))
+		}
+		return ""
+	}
+
+	return data
+}
+
+func (r *RedisService) GetPipelineStatus(id int64) string {
+	return r.getStringByKey(fmt.Sprintf("status:%d", id))
+}
+
+func (r *RedisService) GetPipelineLogs(id int64) string {
+	return r.getStringByKey(fmt.Sprintf("logs:%d", id))
 }
