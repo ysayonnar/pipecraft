@@ -1,6 +1,9 @@
 package services
 
-import "pipecraft/internal/storage"
+import (
+	"pipecraft/internal/models"
+	"pipecraft/internal/storage"
+)
 
 type PipelineService struct {
 	Storage *storage.Storage
@@ -8,4 +11,14 @@ type PipelineService struct {
 
 func NewPipelineService(s *storage.Storage) *PipelineService {
 	return &PipelineService{Storage: s}
+}
+
+func (s *PipelineService) GetPipelineStatus(id int64) (*models.PipelineStatusResponse, error) {
+	//TODO: implement
+	return &models.PipelineStatusResponse{}, nil
+}
+
+func (s *PipelineService) GetPipelineLogs(id int64) (*models.PipelineLogsResponse, error) {
+	//TODO: implement
+	return &models.PipelineLogsResponse{}, nil
 }

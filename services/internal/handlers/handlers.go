@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	"log/slog"
@@ -56,7 +57,20 @@ func (h *Handlers) PipelineStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//TODO: cache response - redis
+	statusDto, err := h.PipelineService.GetPipelineStatus(pipelineId)
+	//TODO: handler error
+
+	response, err := json.Marshal(statusDto)
+	if err != nil {
+		slog.Error("error while marshaling json", logger.Err(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	h.RedisService.SetPipelineStatus(pipelineId, string(response))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(response)
 }
 
 func (h *Handlers) PipelineLogs(w http.ResponseWriter, r *http.Request) {
@@ -86,5 +100,18 @@ func (h *Handlers) PipelineLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//TODO: cache response - redis
+	logsDto, err := h.PipelineService.GetPipelineLogs(pipelineId)
+	//TODO: handler error
+
+	response, err := json.Marshal(logsDto)
+	if err != nil {
+		slog.Error("error while marshaling json", logger.Err(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	h.RedisService.SetPipelineLogs(pipelineId, string(response))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(response)
 }

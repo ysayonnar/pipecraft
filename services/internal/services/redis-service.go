@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const DEFAULT_TTL_SECONDS = 30
+
 type RedisService struct {
 	client *redis.Client
 }
@@ -34,6 +36,24 @@ func NewRedisService() *RedisService {
 
 func (r *RedisService) Close() {
 	r.client.Close()
+}
+
+func (r *RedisService) setValueByKey(key string, value string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err := r.client.Set(ctx, key, value, time.Second*time.Duration(DEFAULT_TTL_SECONDS)).Err()
+	if err != nil {
+		slog.Error("error while setting data to redis", logger.Err(err))
+	}
+}
+
+func (r *RedisService) SetPipelineStatus(id int64, data string) {
+	r.setValueByKey(fmt.Sprintf("status:%d", id), data)
+}
+
+func (r *RedisService) SetPipelineLogs(id int64, data string) {
+	r.setValueByKey(fmt.Sprintf("logs:%d", id), data)
 }
 
 func (r *RedisService) getStringByKey(key string) string {
