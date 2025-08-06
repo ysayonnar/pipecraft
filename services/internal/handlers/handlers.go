@@ -8,11 +8,12 @@ import (
 )
 
 type Handlers struct {
-	Service *services.Service
+	PipelineService *services.PipelineService
+	RedisService    *services.RedisService
 }
 
-func New(s *services.Service) *Handlers {
-	return &Handlers{Service: s}
+func New(redisService *services.RedisService, pipelineService *services.PipelineService) *Handlers {
+	return &Handlers{PipelineService: pipelineService, RedisService: redisService}
 }
 
 // TODO: check if pipeline exists by commit, repo, branch and image

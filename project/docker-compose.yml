@@ -1,4 +1,5 @@
 services:
+
   app:
     build:
       context: ./../services
@@ -10,6 +11,7 @@ services:
       DSN: "host=app-postgres port=5432 user=postgres password=password dbname=pipecraft sslmode=disable timezone=UTC connect_timeout=5"
     depends_on:
       - migrate
+      - redis
 
   app-postgres:
     image: 'postgres:14.0'
@@ -31,3 +33,11 @@ services:
     command: ["-path", "/migrations", "-database", "postgres://postgres:password@app-postgres:5432/pipecraft?sslmode=disable", "up"]
     depends_on:
       - app-postgres
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./db-data/redis:/data

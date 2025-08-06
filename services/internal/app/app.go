@@ -24,8 +24,11 @@ func (app *App) Run() {
 	storage := storage.MustInit()
 	slog.Info("Database connected")
 
-	service := services.New(storage)
-	handlers := handlers.New(service)
+	pipelineService := services.NewPipelineService(storage)
+	redisService := services.NewRedisService()
+	slog.Info("redis connected")
+
+	handlers := handlers.New(redisService, pipelineService)
 	server := server.New(handlers)
 
 	slog.Info("server listening", slog.Int("port", app.Config.Http.Port))
@@ -39,5 +42,6 @@ func (app *App) Run() {
 	slog.Info("Graceful shutdown application...", slog.String("signal", sign.String()))
 
 	//TODO: проверять, есть ли не закрытые контейнеры
+	redisService.Close()
 	storage.Db.Close()
 }

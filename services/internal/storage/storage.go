@@ -33,8 +33,6 @@ func MustInit() *Storage {
 		panic(err)
 	}
 
-	//TODO: create tables here or migrations idk
-
 	return &Storage{Db: conn}
 }
 
