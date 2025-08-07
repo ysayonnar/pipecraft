@@ -1,14 +1,20 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"pipecraft/internal/logger"
 	"time"
 
 	_ "github.com/lib/pq"
+)
+
+var (
+	ErrNotFound = errors.New("not found")
 )
 
 const (
@@ -48,4 +54,31 @@ func tryToConnect(dsn string) (*sql.DB, error) {
 
 		<-time.After(DEFAULT_CONNECTION_DELAY)
 	}
+}
+
+func (s *Storage) GetPipelineStatus(id int64) (string, error) {
+	const op = `storage.GetPipelineStatus`
+
+	query := `
+		SELECT
+			status
+		FROM 
+			pipelines
+		WHERE 
+			pipeline_id = $1;
+	`
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	var status string
+	err := s.Db.QueryRowContext(ctx, query, id).Scan(&status)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	return status, nil
 }

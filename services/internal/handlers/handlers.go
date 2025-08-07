@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
 	"log/slog"
 	"net/http"
 	"pipecraft/internal/logger"
+	"pipecraft/internal/models"
 	"pipecraft/internal/services"
 	"strconv"
 )
@@ -58,8 +60,18 @@ func (h *Handlers) PipelineStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statusDto, err := h.PipelineService.GetPipelineStatus(pipelineId)
-	//TODO: handler error
+	if err != nil {
+		if errors.Is(err, services.ErrNotFound) {
+			errorResponseDto := models.ErrorResponse{Error: "pipeline with such id doesn't exist"}
+			writeJson(errorResponseDto, w, http.StatusNotFound)
+			return
+		}
+		slog.Error("error while getting pipeline status", logger.Err(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
+	//NOTE: need to make out of writeJson function because of caching
 	response, err := json.Marshal(statusDto)
 	if err != nil {
 		slog.Error("error while marshaling json", logger.Err(err))
@@ -101,7 +113,7 @@ func (h *Handlers) PipelineLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logsDto, err := h.PipelineService.GetPipelineLogs(pipelineId)
-	//TODO: handler error
+	//TODO: handle error
 
 	response, err := json.Marshal(logsDto)
 	if err != nil {
@@ -113,5 +125,18 @@ func (h *Handlers) PipelineLogs(w http.ResponseWriter, r *http.Request) {
 	h.RedisService.SetPipelineLogs(pipelineId, string(response))
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Write(response)
+}
+
+func writeJson(v any, w http.ResponseWriter, status int) {
+	response, err := json.Marshal(v)
+	if err != nil {
+		slog.Error("error while marshaling json", logger.Err(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	w.Write(response)
 }
