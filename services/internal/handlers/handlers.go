@@ -113,7 +113,16 @@ func (h *Handlers) PipelineLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logsDto, err := h.PipelineService.GetPipelineLogs(pipelineId)
-	//TODO: handle error
+	if err != nil {
+		if errors.Is(err, services.ErrNotFound) {
+			errorResponseDto := models.ErrorResponse{Error: "pipeline with such id doesn't exist or pipeline is waiting in queue"}
+			writeJson(errorResponseDto, w, http.StatusNotFound)
+			return
+		}
+		slog.Error("error while getting pipeline status", logger.Err(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	response, err := json.Marshal(logsDto)
 	if err != nil {

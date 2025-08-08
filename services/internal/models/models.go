@@ -25,7 +25,6 @@ type Logs struct {
 	Command       string `json:"command"`
 	Results       string `json:"results"`
 	FinalStatus   string `json:"final_status"`
-	PipelineId    int64  `json:"pipeline_id"`
 }
 type PipelineLogsResponse struct {
 	Logs []Logs `json:"logs"`

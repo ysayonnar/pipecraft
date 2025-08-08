@@ -22,6 +22,7 @@ const (
 	DEFAULT_RETRIES          = 5
 )
 
+// TODO: add created_at field for pipelines and logs
 type Storage struct {
 	Db *sql.DB
 }
@@ -81,4 +82,57 @@ func (s *Storage) GetPipelineStatus(id int64) (string, error) {
 	}
 
 	return status, nil
+}
+
+func (s *Storage) GetPipelineLogs(id int64) ([]*LogsTable, error) {
+	const op = `storage.GetPipelineLogs`
+
+	query := `
+		SELECT
+			log_id,
+			command_number,
+			command_name,
+			command,
+			results,
+			final_status
+		FROM
+			logs
+		WHERE
+			pipeline_fk_id = $1
+		ORDER BY
+			command_number;
+    `
+
+	logs := make([]*LogsTable, 0)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	rows, err := s.Db.QueryContext(ctx, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	for rows.Next() {
+		logEntity := &LogsTable{}
+
+		err = rows.Scan(
+			&logEntity.LogId,
+			&logEntity.CommandNumber,
+			&logEntity.CommandName,
+			&logEntity.Command,
+			&logEntity.Results,
+			&logEntity.FinalStatus,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("op: %s, err: %w", op, err)
+		}
+
+		logs = append(logs, logEntity)
+	}
+
+	return logs, nil
 }
