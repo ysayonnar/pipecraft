@@ -24,6 +24,11 @@ services:
       POSTGRES_DB: pipecraft
     volumes: 
       - ./db-data/app-postgres/:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d pipecraft" ]
+      interval: 3s
+      timeout: 3s
+      retries: 5
 
   migrate:
     image: migrate/migrate
@@ -32,7 +37,8 @@ services:
     entrypoint: ["migrate"]
     command: ["-path", "/migrations", "-database", "postgres://postgres:password@app-postgres:5432/pipecraft?sslmode=disable", "up"]
     depends_on:
-      - app-postgres
+      app-postgres:
+        condition: service_healthy
 
   redis:
     image: redis:7-alpine
