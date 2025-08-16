@@ -4,18 +4,31 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gorilla/mux"
 	"log/slog"
 	"net/http"
 	"pipecraft/internal/logger"
 	"pipecraft/internal/models"
 	"pipecraft/internal/services"
 	"strconv"
+
+	"github.com/gorilla/mux"
 )
 
+type PipelineService interface {
+	GetPipelineStatus(id int64) (*models.PipelineStatusResponse, error)
+	GetPipelineLogs(id int64) (*models.PipelineLogsResponse, error)
+}
+
+type RedisService interface {
+	SetPipelineStatus(id int64, data string)
+	SetPipelineLogs(id int64, data string)
+	GetPipelineStatus(id int64) string
+	GetPipelineLogs(id int64) string
+}
+
 type Handlers struct {
-	PipelineService *services.PipelineService
-	RedisService    *services.RedisService
+	PipelineService PipelineService
+	RedisService    RedisService
 }
 
 func New(redisService *services.RedisService, pipelineService *services.PipelineService) *Handlers {

@@ -15,8 +15,6 @@ type PipelineService struct {
 	Storage *storage.Storage
 }
 
-//just test
-
 func NewPipelineService(s *storage.Storage) *PipelineService {
 	return &PipelineService{Storage: s}
 }

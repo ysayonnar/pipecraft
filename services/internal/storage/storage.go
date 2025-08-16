@@ -22,7 +22,6 @@ const (
 	DEFAULT_RETRIES          = 5
 )
 
-// TODO: add created_at field for pipelines and logs
 type Storage struct {
 	Db *sql.DB
 }
