@@ -14,12 +14,19 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound              = errors.New("not found")
+	ErrPipelineAlreadyExists = errors.New("pipeline already exists")
 )
 
 const (
 	DEFAULT_CONNECTION_DELAY = time.Second
 	DEFAULT_RETRIES          = 5
+
+	PIPELINE_STATUS_WAITING   = "waiting"
+	PIPELINE_STATUS_RUNNING   = "running"
+	PIPELINE_STATUS_ABORTED   = "aborted"
+	PIPELINE_STATUS_FAILED    = "failed"
+	PIPELINE_STATUS_COMPLETED = "completed"
 )
 
 type Storage struct {
@@ -54,6 +61,48 @@ func tryToConnect(dsn string) (*sql.DB, error) {
 
 		<-time.After(DEFAULT_CONNECTION_DELAY)
 	}
+}
+
+func (s *Storage) CreatePipeline(repository, branch, commit string) (int64, error) {
+	const op = `storage.CreatePipeline`
+
+	tx, err := s.Db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+	defer tx.Rollback()
+
+	selectQuery := `
+		SELECT
+			pipeline_id
+		FROM
+			pipelines
+		WHERE
+			repository = $1 AND branch = $2 AND commit = $3;
+	`
+
+	var pipelineId int64
+	err = tx.QueryRow(selectQuery, repository, branch, commit).Scan(&pipelineId)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("%s: %w", op, err)
+		}
+	} else {
+		return pipelineId, ErrPipelineAlreadyExists
+	}
+
+	insertQuery := `INSERT INTO pipelines (status, repository, branch, commit) VALUES ($1, $2, $3, $4) RETURNING pipeline_id;`
+	err = tx.QueryRow(insertQuery, PIPELINE_STATUS_WAITING, repository, branch, commit).Scan(&pipelineId)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return pipelineId, nil
 }
 
 func (s *Storage) GetPipelineStatus(id int64) (string, error) {

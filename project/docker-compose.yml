@@ -10,7 +10,7 @@ services:
     environment:
       DSN: "host=app-postgres port=5432 user=postgres password=password dbname=pipecraft sslmode=disable timezone=UTC connect_timeout=5"
     depends_on:
-      - migrate
+      - migrate # TODO: почему то не дожидидается migrate
       - redis
 
   app-postgres:

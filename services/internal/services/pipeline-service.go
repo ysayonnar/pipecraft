@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("pipeline not found")
+	ErrNotFound      = errors.New("pipeline not found")
+	ErrAlreadyExists = errors.New("pipeline already exists")
 )
 
 type PipelineService struct {
@@ -19,8 +20,24 @@ func NewPipelineService(s *storage.Storage) *PipelineService {
 	return &PipelineService{Storage: s}
 }
 
-func (s *PipelineService) GetPipelineStatus(id int64) (*models.PipelineStatusResponse, error) {
-	const op = `services.PipelineService.GetPipelineStatus`
+func (s *PipelineService) Run(dto *models.RunPipelineRequest) (*models.RunPipelineResponse, error) {
+	const op = `service.PipelineService.Run`
+
+	pipelineId, err := s.Storage.CreatePipeline(dto.RepositoryUrl, dto.Branch, dto.Commit)
+	if err != nil {
+		if errors.Is(err, storage.ErrPipelineAlreadyExists) {
+			return &models.RunPipelineResponse{PipelineId: pipelineId}, ErrAlreadyExists
+		}
+		return nil, fmt.Errorf(`%s: %w`, err, op)
+	}
+
+	//TODO: писать в rabbitmq id пайплайна
+
+	return &models.RunPipelineResponse{PipelineId: pipelineId}, nil
+}
+
+func (s *PipelineService) GetStatus(id int64) (*models.PipelineStatusResponse, error) {
+	const op = `services.PipelineService.GetStatus`
 
 	status, err := s.Storage.GetPipelineStatus(id)
 	if err != nil {
@@ -33,8 +50,8 @@ func (s *PipelineService) GetPipelineStatus(id int64) (*models.PipelineStatusRes
 	return &models.PipelineStatusResponse{Status: status}, nil
 }
 
-func (s *PipelineService) GetPipelineLogs(id int64) (*models.PipelineLogsResponse, error) {
-	const op = `services.PipelineService.GetPipelineLogs`
+func (s *PipelineService) GetLogs(id int64) (*models.PipelineLogsResponse, error) {
+	const op = `services.PipelineService.GetLogs`
 
 	logs, err := s.Storage.GetPipelineLogs(id)
 	if err != nil {

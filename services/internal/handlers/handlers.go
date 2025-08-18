@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"pipecraft/internal/logger"
@@ -15,8 +15,9 @@ import (
 )
 
 type PipelineService interface {
-	GetPipelineStatus(id int64) (*models.PipelineStatusResponse, error)
-	GetPipelineLogs(id int64) (*models.PipelineLogsResponse, error)
+	Run(dto *models.RunPipelineRequest) (*models.RunPipelineResponse, error)
+	GetStatus(id int64) (*models.PipelineStatusResponse, error)
+	GetLogs(id int64) (*models.PipelineLogsResponse, error)
 }
 
 type RedisService interface {
@@ -35,14 +36,42 @@ func New(redisService *services.RedisService, pipelineService *services.Pipeline
 	return &Handlers{PipelineService: pipelineService, RedisService: redisService}
 }
 
-// TODO: check if pipeline exists by commit, repo, branch and image
 func (h *Handlers) RunPipeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	fmt.Fprint(w, "RUN PIPELINE")
+	jsonData, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("error while reading json", logger.Err(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	var dto models.RunPipelineRequest
+	err = json.Unmarshal(jsonData, &dto)
+	if err != nil {
+		slog.Error("error while parsing json", logger.Err(err))
+		errorResponse := models.ErrorResponse{Error: "invalid json"}
+		writeJson(errorResponse, w, http.StatusBadRequest)
+		return
+	}
+
+	responseDto, err := h.PipelineService.Run(&dto)
+	if err != nil {
+		if errors.Is(err, services.ErrAlreadyExists) {
+			w.Header().Set("Content-Type", "application/json")
+			writeJson(responseDto, w, http.StatusOK)
+			return
+		}
+		slog.Error("error while running pipeline", logger.Err(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJson(responseDto, w, http.StatusCreated) //NOTE: means that pipeline doesn't exist
 }
 
 func (h *Handlers) PipelineStatus(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +101,7 @@ func (h *Handlers) PipelineStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statusDto, err := h.PipelineService.GetPipelineStatus(pipelineId)
+	statusDto, err := h.PipelineService.GetStatus(pipelineId)
 	if err != nil {
 		if errors.Is(err, services.ErrNotFound) {
 			errorResponseDto := models.ErrorResponse{Error: "pipeline with such id doesn't exist"}
@@ -84,7 +113,7 @@ func (h *Handlers) PipelineStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//NOTE: need to make out of writeJson function because of caching
+	//NOTE: have to make out of writeJson function because of caching
 	response, err := json.Marshal(statusDto)
 	if err != nil {
 		slog.Error("error while marshaling json", logger.Err(err))
@@ -125,7 +154,7 @@ func (h *Handlers) PipelineLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logsDto, err := h.PipelineService.GetPipelineLogs(pipelineId)
+	logsDto, err := h.PipelineService.GetLogs(pipelineId)
 	if err != nil {
 		if errors.Is(err, services.ErrNotFound) {
 			errorResponseDto := models.ErrorResponse{Error: "pipeline with such id doesn't exist or pipeline is waiting in queue"}
