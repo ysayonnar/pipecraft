@@ -1,5 +1,3 @@
-//go:build test
-
 package handlers
 
 import (
@@ -14,7 +12,7 @@ type MockRedisService struct {
 	client *miniredis.Miniredis
 }
 
-func New() *MockRedisService {
+func NewMockRedisServie() *MockRedisService {
 	client, err := miniredis.Run()
 	if err != nil {
 		panic(err)

@@ -32,7 +32,7 @@ type Handlers struct {
 	RedisService    RedisService
 }
 
-func New(redisService *services.RedisService, pipelineService *services.PipelineService) *Handlers {
+func New(redisService RedisService, pipelineService PipelineService) *Handlers {
 	return &Handlers{PipelineService: pipelineService, RedisService: redisService}
 }
 
