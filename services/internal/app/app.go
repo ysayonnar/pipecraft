@@ -9,6 +9,7 @@ import (
 	"pipecraft/internal/server"
 	"pipecraft/internal/services"
 	"pipecraft/internal/storage"
+	"pipecraft/internal/worker"
 	"syscall"
 )
 
@@ -33,6 +34,8 @@ func (app *App) Run() {
 
 	slog.Info("server listening", slog.Int("port", app.Config.Http.Port))
 	go server.Listen(app.Config.Http)
+
+	go worker.StartListener(storage)
 
 	// Graceful shutdown
 	stop := make(chan os.Signal, 1)

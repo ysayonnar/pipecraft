@@ -184,3 +184,33 @@ func (s *Storage) GetPipelineLogs(id int64) ([]*LogsTable, error) {
 
 	return logs, nil
 }
+
+func (s *Storage) GetLastWaitingPipeline() (int64, error) {
+	const op = `storage.GetLastWaitingPipeline`
+
+	query := `
+		SELECT
+			pipeline_id
+		FROM
+			pipelines
+		WHERE
+		    status = $1
+		ORDER BY 
+			created_at ASC 
+		LIMIT 1;
+	`
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	var pipelineId int64
+	err := s.Db.QueryRowContext(ctx, query, PIPELINE_STATUS_WAITING).Scan(&pipelineId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrNotFound
+		}
+		return 0, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	return pipelineId, nil
+}

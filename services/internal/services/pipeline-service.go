@@ -31,8 +31,6 @@ func (s *PipelineService) Run(dto *models.RunPipelineRequest) (*models.RunPipeli
 		return nil, fmt.Errorf(`%s: %w`, err, op)
 	}
 
-	//TODO: писать в rabbitmq id пайплайна
-
 	return &models.RunPipelineResponse{PipelineId: pipelineId}, nil
 }
 

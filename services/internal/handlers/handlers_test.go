@@ -59,3 +59,5 @@ func TestHandlers_RunPipeline_MethodNotAllowed(t *testing.T) {
 	handlers.RunPipeline(rr, req)
 	require.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 }
+
+//TODO: написать тесты еще для двух хендлеров
