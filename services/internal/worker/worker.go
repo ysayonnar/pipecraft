@@ -6,12 +6,20 @@ import (
 	"pipecraft/internal/logger"
 	"pipecraft/internal/storage"
 	"time"
+
+	"github.com/docker/docker/client"
 )
 
 const (
 	MAX_WORKERS     = 5
 	LISTEN_INTERVAL = 10
 )
+
+type Worker struct {
+	DockerClient *client.Client
+	PipelineId   int64
+	done         chan bool
+}
 
 func StartListener(s *storage.Storage) {
 	workerPool := make(chan struct{}, MAX_WORKERS)
@@ -27,9 +35,35 @@ func StartListener(s *storage.Storage) {
 		workerPool <- struct{}{}
 		go func(pipelineId int64) {
 			defer func() { <-workerPool }()
-			//TODO: вызывать функцию для запуска пайплайна
+			worker := NewWorker(pipelineId)
+			<-worker.done
 		}(pipelineId)
 
 		time.Sleep(time.Duration(LISTEN_INTERVAL) * time.Second)
 	}
+}
+
+func NewWorker(pipelineId int64) *Worker {
+	client, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		slog.Error("error while creating docker client", logger.Err(err))
+		panic(err)
+	}
+	return &Worker{PipelineId: pipelineId, done: make(chan bool), DockerClient: client}
+}
+
+func (w *Worker) Run() {
+	const op = "worker.Run"
+
+	// TODO: создавать контейнер с докером и гитом
+
+	// TODO: клонировать репозиторий
+
+	// TODO: парсить jobs для CI
+
+	// TODO: выполнение jobs и запись логов
+
+	// TODO: изменение статуса пайплайна
+
+	// TODO: очистка ресурсов и пишу в w.done
 }
