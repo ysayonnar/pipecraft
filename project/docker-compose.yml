@@ -12,6 +12,8 @@ services:
     depends_on:
       - migrate  # NOTE: не дожидается пока выполнятся миграции
       - redis
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   app-postgres:
     image: 'postgres:14.0'

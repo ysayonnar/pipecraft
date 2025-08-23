@@ -1,12 +1,15 @@
 package worker
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"pipecraft/internal/logger"
 	"pipecraft/internal/storage"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
 
@@ -55,7 +58,29 @@ func NewWorker(pipelineId int64) *Worker {
 func (w *Worker) Run() {
 	const op = "worker.Run"
 
-	// TODO: создавать контейнер с докером и гитом
+	containerName := fmt.Sprintf("pipecraft-%d", w.PipelineId)
+
+	ctx := context.Background()
+	resp, err := w.DockerClient.ContainerCreate(
+		ctx,
+		&container.Config{
+			Image: "alpine-git",
+		},
+		&container.HostConfig{
+			Binds: []string{
+				"/var/run/docker.sock:/var/run/docker.sock",
+			},
+		},
+		nil,
+		nil,
+		containerName,
+	)
+	if err != nil {
+		//TODO: менять статус пайплайна
+		slog.Error("error while creating docker container", logger.Err(err))
+	}
+
+	_ = resp
 
 	// TODO: клонировать репозиторий
 

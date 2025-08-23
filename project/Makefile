@@ -1,8 +1,13 @@
+build_alpine_git:
+	docker build -t alpine-git -f ../services/alpine-git.dockerfile .
+
 up:
+	$(MAKE) build_alpine_git
 	docker compose up --build -d
 
 up_logs:
-	docker compose up --build 
+	$(MAKE) build_alpine_git
+	docker compose up --build
 
 down:
 	docker compose down
