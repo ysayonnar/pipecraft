@@ -214,3 +214,31 @@ func (s *Storage) GetLastWaitingPipeline() (int64, error) {
 
 	return pipelineId, nil
 }
+
+func (s *Storage) UpdatePipelineStatus(id int64, status string) error {
+	const op = `storage.UpdatePipelineStatus`
+
+	query := `
+		UPDATE pipelines
+		SET status = $1
+		WHERE pipeline_id = $2;
+	`
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	res, err := s.Db.ExecContext(ctx, query, status, id)
+	if err != nil {
+		return fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("op: %s, err: %w", op, err)
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}

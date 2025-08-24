@@ -9,6 +9,7 @@ import (
 	"pipecraft/internal/storage"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
@@ -19,8 +20,9 @@ const (
 )
 
 type Worker struct {
-	DockerClient *client.Client
-	PipelineId   int64
+	dockerClient *client.Client
+	storage      *storage.Storage
+	pipelineId   int64
 	done         chan bool
 }
 
@@ -38,7 +40,7 @@ func StartListener(s *storage.Storage) {
 		workerPool <- struct{}{}
 		go func(pipelineId int64) {
 			defer func() { <-workerPool }()
-			worker := NewWorker(pipelineId)
+			worker := NewWorker(s, pipelineId)
 			<-worker.done
 		}(pipelineId)
 
@@ -46,22 +48,32 @@ func StartListener(s *storage.Storage) {
 	}
 }
 
-func NewWorker(pipelineId int64) *Worker {
+func NewWorker(s *storage.Storage, pipelineId int64) *Worker {
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		slog.Error("error while creating docker client", logger.Err(err))
 		panic(err)
 	}
-	return &Worker{PipelineId: pipelineId, done: make(chan bool), DockerClient: client}
+	return &Worker{storage: s, pipelineId: pipelineId, done: make(chan bool), dockerClient: client}
 }
 
 func (w *Worker) Run() {
 	const op = "worker.Run"
 
-	containerName := fmt.Sprintf("pipecraft-%d", w.PipelineId)
+	defer func() { w.done <- true }()
+
+	err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_RUNNING)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			slog.Warn("pipeline with known id was not found")
+			return
+		}
+		slog.Error("error while updating pipeline status", logger.Err(err))
+		return
+	}
 
 	ctx := context.Background()
-	resp, err := w.DockerClient.ContainerCreate(
+	resp, err := w.dockerClient.ContainerCreate(
 		ctx,
 		&container.Config{
 			Image: "alpine-git",
@@ -73,16 +85,30 @@ func (w *Worker) Run() {
 		},
 		nil,
 		nil,
-		containerName,
+		fmt.Sprintf("pipecraft-%d", w.pipelineId),
 	)
 	if err != nil {
-		//TODO: менять статус пайплайна
+		err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_ABORTED)
+		if err != nil {
+			slog.Error("error while updating pipeline status", logger.Err(err))
+		}
 		slog.Error("error while creating docker container", logger.Err(err))
+		return
 	}
 
-	_ = resp
+	// TODO: получать здесь repository, branch, commit
 
-	// TODO: клонировать репозиторий
+	var repository, branch, commit string
+
+	err = w.cloneRepository(resp.ID, repository, branch, commit)
+	if err != nil {
+		err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_ABORTED)
+		if err != nil {
+			slog.Error("error while updating pipeline status", logger.Err(err))
+		}
+		slog.Error("error while cloning repository", logger.Err(err))
+		return
+	}
 
 	// TODO: парсить jobs для CI
 
@@ -91,4 +117,68 @@ func (w *Worker) Run() {
 	// TODO: изменение статуса пайплайна
 
 	// TODO: очистка ресурсов и пишу в w.done
+}
+
+func (w *Worker) cloneRepository(containerId, repository, branch, commit string) error {
+	const op = `worker.cloneRepository`
+
+	execConfig1 := container.ExecOptions{
+		Cmd: []string{"git", "clone", "--depth", "1", "--branch", branch, "--single-branch", repository, "/workspace"},
+	}
+
+	execConfig2 := container.ExecOptions{
+		Cmd: []string{"git", "-C", "/workspace", "checkout", commit},
+	}
+
+	exitCode, err := w.execCommandWithExitCode(containerId, execConfig1)
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	exitCode, err = w.execCommandWithExitCode(containerId, execConfig2)
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	return nil
+}
+
+func (w *Worker) execCommandWithExitCode(containerId string, execOpts container.ExecOptions) (int, error) {
+	const op = `worker.ExecCommandWithExitCode`
+
+	ctx := context.Background()
+
+	execIDResp, err := w.dockerClient.ContainerExecCreate(ctx, containerId, execOpts)
+	if err != nil {
+		return 0, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	if err = w.dockerClient.ContainerExecStart(ctx, execIDResp.ID, container.ExecAttachOptions{}); err != nil {
+		return 0, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	inspectResp, err := w.dockerClient.ContainerExecInspect(ctx, execIDResp.ID)
+	if err != nil {
+		return 0, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	return inspectResp.ExitCode, nil
+}
+
+func (w *Worker) execCommandWithLogs(containerId string, execOpts container.ExecOptions) (*types.HijackedResponse, error) {
+	const op = `worker.ExecCommandWithLogs`
+
+	ctx := context.Background()
+
+	execIDResp, err := w.dockerClient.ContainerExecCreate(ctx, containerId, execOpts)
+	if err != nil {
+		return nil, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	attachResp, err := w.dockerClient.ContainerExecAttach(ctx, execIDResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	return &attachResp, nil
 }
