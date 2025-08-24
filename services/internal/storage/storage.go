@@ -242,3 +242,36 @@ func (s *Storage) UpdatePipelineStatus(id int64, status string) error {
 
 	return nil
 }
+
+func (s *Storage) GetPipelineInfo(id int64) (*PipelinesTable, error) {
+	const op = `storage.GetPipelineInfo`
+
+	query := `
+		SELECT
+			repository,
+			branch,
+			commit
+		FROM 
+			pipelines
+		WHERE
+			pipeline_id = $1;
+	`
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	row := s.Db.QueryRowContext(ctx, query, id)
+	if err := row.Err(); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("op: %s, err: %w", op, ErrNotFound)
+	}
+
+	var pipeline *PipelinesTable
+	if err := row.Scan(&pipeline.Repository, &pipeline.Branch, &pipeline.Commit); err != nil {
+		return nil, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	return pipeline, nil
+}

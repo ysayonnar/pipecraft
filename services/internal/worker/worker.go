@@ -88,25 +88,31 @@ func (w *Worker) Run() {
 		fmt.Sprintf("pipecraft-%d", w.pipelineId),
 	)
 	if err != nil {
+		slog.Error("error while creating docker container", logger.Err(err))
 		err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_ABORTED)
 		if err != nil {
 			slog.Error("error while updating pipeline status", logger.Err(err))
 		}
-		slog.Error("error while creating docker container", logger.Err(err))
 		return
 	}
 
-	// TODO: получать здесь repository, branch, commit
-
-	var repository, branch, commit string
-
-	err = w.cloneRepository(resp.ID, repository, branch, commit)
+	pipelineInfo, err := w.storage.GetPipelineInfo(w.pipelineId)
 	if err != nil {
+		slog.Error("error while selecting pipeline info", logger.Err(err))
 		err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_ABORTED)
 		if err != nil {
 			slog.Error("error while updating pipeline status", logger.Err(err))
 		}
+		return
+	}
+
+	err = w.cloneRepository(resp.ID, pipelineInfo.Repository, pipelineInfo.Branch, pipelineInfo.Commit)
+	if err != nil {
 		slog.Error("error while cloning repository", logger.Err(err))
+		err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_ABORTED)
+		if err != nil {
+			slog.Error("error while updating pipeline status", logger.Err(err))
+		}
 		return
 	}
 
