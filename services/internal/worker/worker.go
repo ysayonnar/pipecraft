@@ -106,6 +106,7 @@ func (w *Worker) Run() {
 		return
 	}
 
+	// cloning repository
 	err = w.cloneRepository(resp.ID, pipelineInfo.Repository, pipelineInfo.Branch, pipelineInfo.Commit)
 	if err != nil {
 		slog.Error("error while cloning repository", logger.Err(err))
