@@ -275,3 +275,19 @@ func (s *Storage) GetPipelineInfo(id int64) (*PipelinesTable, error) {
 
 	return pipeline, nil
 }
+
+func (s *Storage) CreateLog(logTable LogsTable) error {
+	const op = `storage.CreateLog`
+
+	query := `INSERT INTO logs(pipeline_fk_id, command_number, command, result, final_status) VALUES ($1, $2, $3, $4, $5);`
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err := s.Db.ExecContext(ctx, query, logTable.PipelineId, logTable.CommandNumber, logTable.Command, logTable.Results, logTable.FinalStatus)
+	if err != nil {
+		return fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	return nil
+}

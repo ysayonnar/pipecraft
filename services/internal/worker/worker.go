@@ -9,9 +9,9 @@ import (
 	"pipecraft/internal/jobs"
 	"pipecraft/internal/logger"
 	"pipecraft/internal/storage"
+	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
@@ -132,13 +132,69 @@ func (w *Worker) Run() {
 		return
 	}
 
-	_ = jobs
+	for jobNumber, job := range jobs {
+		for _, step := range job.Steps {
+			execConfig := container.ExecOptions{
+				Cmd:          strings.Split(step.Run, " "),
+				AttachStdout: true,
+				AttachStderr: true,
+			}
 
-	// TODO: выполнение jobs и запись логов
+			logs, exitCode, err := w.execCommandWithLogs(resp.ID, execConfig)
+			if err != nil {
+				slog.Error("error while executing job step", logger.Err(err))
+				err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_ABORTED)
+				if err != nil {
+					slog.Error("error while updating pipeline status", logger.Err(err))
+				}
+				return
+			}
+			if exitCode != 0 {
+				err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_FAILED)
+				if err != nil {
+					slog.Error("error while updating pipeline status", logger.Err(err))
+				}
 
-	// TODO: изменение статуса пайплайна
+				err = w.storage.CreateLog(storage.LogsTable{
+					CommandNumber: jobNumber,
+					CommandName:   fmt.Sprintf("%s:%s", job.Name, step.Name),
+					Command:       step.Run,
+					Results:       string(logs),
+					FinalStatus:   fmt.Sprintf("Failed, exit code: %d", exitCode),
+					PipelineId:    w.pipelineId,
+				})
+				if err != nil {
+					slog.Error("error while creating logs", logger.Err(err))
+				}
 
-	// TODO: очистка ресурсов и пишу в w.done
+				return
+			}
+
+			err = w.storage.CreateLog(storage.LogsTable{
+				CommandNumber: jobNumber,
+				CommandName:   fmt.Sprintf("%s:%s", job.Name, step.Name),
+				Command:       step.Run,
+				Results:       string(logs),
+				FinalStatus:   "Succeeded",
+				PipelineId:    w.pipelineId,
+			})
+			if err != nil {
+				slog.Error("error while creating logs", logger.Err(err))
+				return
+			}
+		}
+	}
+
+	err = w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_COMPLETED)
+	if err != nil {
+		slog.Error("error while updating pipeline status", logger.Err(err))
+		return
+	}
+
+	err = w.cleanupContainer(resp.ID)
+	if err != nil {
+		slog.Warn("failed to stop container", logger.Err(err))
+	}
 }
 
 func (w *Worker) cloneRepository(containerId, repository, branch, commit string) error {
@@ -187,22 +243,33 @@ func (w *Worker) execCommandWithExitCode(containerId string, execOpts container.
 	return inspectResp.ExitCode, nil
 }
 
-func (w *Worker) execCommandWithLogs(containerId string, execOpts container.ExecOptions) (*types.HijackedResponse, error) {
+func (w *Worker) execCommandWithLogs(containerId string, execOpts container.ExecOptions) ([]byte, int, error) {
 	const op = `worker.ExecCommandWithLogs`
 
 	ctx := context.Background()
 
 	execIDResp, err := w.dockerClient.ContainerExecCreate(ctx, containerId, execOpts)
 	if err != nil {
-		return nil, fmt.Errorf("op: %s, err: %w", op, err)
+		return nil, 0, fmt.Errorf("op: %s, err: %w", op, err)
 	}
 
 	attachResp, err := w.dockerClient.ContainerExecAttach(ctx, execIDResp.ID, container.ExecAttachOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("op: %s, err: %w", op, err)
+		return nil, 0, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+	defer attachResp.Close()
+
+	inspectResp, err := w.dockerClient.ContainerExecInspect(ctx, execIDResp.ID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("op: %s, err: %w", op, err)
 	}
 
-	return &attachResp, nil
+	logs, err := io.ReadAll(attachResp.Reader)
+	if err != nil {
+		return nil, 0, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	return logs, inspectResp.ExitCode, nil
 }
 
 func (w *Worker) readCiConfig(containerId string) ([]jobs.Job, error) {
@@ -237,4 +304,23 @@ func (w *Worker) readCiConfig(containerId string) ([]jobs.Job, error) {
 	}
 
 	return jobs, nil
+}
+
+func (w *Worker) cleanupContainer(containerID string) error {
+	const op = `worker.cleanupContainer`
+
+	ctx := context.Background()
+
+	if err := w.dockerClient.ContainerStop(ctx, containerID, container.StopOptions{}); err != nil {
+		return fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	if err := w.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{
+		RemoveVolumes: true,
+		Force:         true,
+	}); err != nil {
+		return fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	return nil
 }
