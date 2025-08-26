@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"pipecraft/internal/jobs"
 	"pipecraft/internal/logger"
 	"pipecraft/internal/storage"
 	"time"
@@ -17,6 +19,8 @@ import (
 const (
 	MAX_WORKERS     = 5
 	LISTEN_INTERVAL = 10
+
+	DEFAULT_CI_CONFIG_PATH = "/workspace/ci.yaml"
 )
 
 type Worker struct {
@@ -117,7 +121,18 @@ func (w *Worker) Run() {
 		return
 	}
 
-	// TODO: парсить jobs для CI
+	// reading ci config file
+	jobs, err := w.readCiConfig(resp.ID)
+	if err != nil {
+		slog.Error("error while reading CI config", logger.Err(err))
+		err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_ABORTED)
+		if err != nil {
+			slog.Error("error while updating pipeline status", logger.Err(err))
+		}
+		return
+	}
+
+	_ = jobs
 
 	// TODO: выполнение jobs и запись логов
 
@@ -188,4 +203,38 @@ func (w *Worker) execCommandWithLogs(containerId string, execOpts container.Exec
 	}
 
 	return &attachResp, nil
+}
+
+func (w *Worker) readCiConfig(containerId string) ([]jobs.Job, error) {
+	const op = `worker.readCiConfig`
+	execConfig := container.ExecOptions{
+		Cmd:          []string{"cat", DEFAULT_CI_CONFIG_PATH},
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	ctx := context.Background()
+
+	execIDResp, err := w.dockerClient.ContainerExecCreate(ctx, containerId, execConfig)
+	if err != nil {
+		return nil, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	attachResp, err := w.dockerClient.ContainerExecAttach(ctx, execIDResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+	defer attachResp.Close()
+
+	data, err := io.ReadAll(attachResp.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	jobs, err := jobs.ParseJobsOrdered(data)
+	if err != nil {
+		return nil, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	return jobs, nil
 }
