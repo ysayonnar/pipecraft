@@ -1,10 +1,10 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"pipecraft/internal/jobs"
 	"pipecraft/internal/logger"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 const (
@@ -33,6 +34,8 @@ type Worker struct {
 func StartListener(s *storage.Storage) {
 	workerPool := make(chan struct{}, MAX_WORKERS)
 
+	// TODO: почему то запускается несколько воркеров
+
 	for {
 		pipelineId, err := s.GetLastWaitingPipeline()
 		if err != nil {
@@ -41,12 +44,22 @@ func StartListener(s *storage.Storage) {
 			}
 		}
 
-		workerPool <- struct{}{}
-		go func(pipelineId int64) {
-			defer func() { <-workerPool }()
-			worker := NewWorker(s, pipelineId)
-			<-worker.done
-		}(pipelineId)
+		if pipelineId != 0 {
+			go func(pipelineId int64) {
+				workerPool <- struct{}{}
+
+				worker := NewWorker(s, pipelineId)
+				err := worker.storage.UpdatePipelineStatus(pipelineId, storage.PIPELINE_STATUS_RUNNING)
+				if err != nil {
+					slog.Warn("pipeline with known id was not found")
+				} else {
+					go worker.Run()
+				}
+
+				<-worker.done
+				<-workerPool
+			}(pipelineId)
+		}
 
 		time.Sleep(time.Duration(LISTEN_INTERVAL) * time.Second)
 	}
@@ -64,23 +77,18 @@ func NewWorker(s *storage.Storage, pipelineId int64) *Worker {
 func (w *Worker) Run() {
 	const op = "worker.Run"
 
+	slog.Debug("running pipeline", slog.Int64("pipeline_id", w.pipelineId))
+
 	defer func() { w.done <- true }()
 
-	err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_RUNNING)
-	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			slog.Warn("pipeline with known id was not found")
-			return
-		}
-		slog.Error("error while updating pipeline status", logger.Err(err))
-		return
-	}
-
+	//TODO: нужен dind
 	ctx := context.Background()
 	resp, err := w.dockerClient.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image: "alpine-git",
+			Image:      "alpine-git",
+			WorkingDir: "/workspace",
+			Cmd:        []string{"sleep", "infinity"},
 		},
 		&container.HostConfig{
 			Binds: []string{
@@ -89,7 +97,7 @@ func (w *Worker) Run() {
 		},
 		nil,
 		nil,
-		fmt.Sprintf("pipecraft-%d", w.pipelineId),
+		fmt.Sprintf("pipeline-%d", w.pipelineId),
 	)
 	if err != nil {
 		slog.Error("error while creating docker container", logger.Err(err))
@@ -99,6 +107,22 @@ func (w *Worker) Run() {
 		}
 		return
 	}
+
+	if err := w.dockerClient.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		slog.Error("error while starting container docker container", logger.Err(err))
+		err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_ABORTED)
+		if err != nil {
+			slog.Error("error while updating pipeline status", logger.Err(err))
+		}
+		return
+	}
+
+	defer func() {
+		err = w.cleanupContainer(resp.ID)
+		if err != nil {
+			slog.Warn("failed to stop container", logger.Err(err))
+		}
+	}()
 
 	pipelineInfo, err := w.storage.GetPipelineInfo(w.pipelineId)
 	if err != nil {
@@ -131,6 +155,8 @@ func (w *Worker) Run() {
 		}
 		return
 	}
+
+	slog.Debug("jobs", jobs)
 
 	for jobNumber, job := range jobs {
 		for _, step := range job.Steps {
@@ -191,10 +217,7 @@ func (w *Worker) Run() {
 		return
 	}
 
-	err = w.cleanupContainer(resp.ID)
-	if err != nil {
-		slog.Warn("failed to stop container", logger.Err(err))
-	}
+	// TODO: c вольюмами что то придумать чтобы cd работал
 }
 
 func (w *Worker) cloneRepository(containerId, repository, branch, commit string) error {
@@ -208,13 +231,15 @@ func (w *Worker) cloneRepository(containerId, repository, branch, commit string)
 		Cmd: []string{"git", "-C", "/workspace", "checkout", commit},
 	}
 
-	exitCode, err := w.execCommandWithExitCode(containerId, execConfig1)
+	logs, exitCode, err := w.execCommandWithLogs(containerId, execConfig1)
 	if err != nil || exitCode != 0 {
+		slog.Error("error while cloning repository", logger.Err(err), slog.String("logs", string(logs)), slog.Int("exitCode", exitCode))
 		return fmt.Errorf("op: %s, err: %w", op, err)
 	}
 
-	exitCode, err = w.execCommandWithExitCode(containerId, execConfig2)
+	logs, exitCode, err = w.execCommandWithLogs(containerId, execConfig2)
 	if err != nil || exitCode != 0 {
+		slog.Error("error while cloning repository", logger.Err(err), slog.String("logs", string(logs)), slog.Int("exitCode", exitCode))
 		return fmt.Errorf("op: %s, err: %w", op, err)
 	}
 
@@ -259,17 +284,26 @@ func (w *Worker) execCommandWithLogs(containerId string, execOpts container.Exec
 	}
 	defer attachResp.Close()
 
-	inspectResp, err := w.dockerClient.ContainerExecInspect(ctx, execIDResp.ID)
+	var exitCode int
+	for {
+		inspect, err := w.dockerClient.ContainerExecInspect(ctx, execIDResp.ID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("op: %s, err: %w", op, err)
+		}
+		if !inspect.Running {
+			exitCode = inspect.ExitCode
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	var outBuf, errBuf bytes.Buffer
+	_, err = stdcopy.StdCopy(&outBuf, &errBuf, attachResp.Reader)
 	if err != nil {
 		return nil, 0, fmt.Errorf("op: %s, err: %w", op, err)
 	}
 
-	logs, err := io.ReadAll(attachResp.Reader)
-	if err != nil {
-		return nil, 0, fmt.Errorf("op: %s, err: %w", op, err)
-	}
-
-	return logs, inspectResp.ExitCode, nil
+	return outBuf.Bytes(), exitCode, nil
 }
 
 func (w *Worker) readCiConfig(containerId string) ([]jobs.Job, error) {
@@ -280,20 +314,7 @@ func (w *Worker) readCiConfig(containerId string) ([]jobs.Job, error) {
 		AttachStderr: true,
 	}
 
-	ctx := context.Background()
-
-	execIDResp, err := w.dockerClient.ContainerExecCreate(ctx, containerId, execConfig)
-	if err != nil {
-		return nil, fmt.Errorf("op: %s, err: %w", op, err)
-	}
-
-	attachResp, err := w.dockerClient.ContainerExecAttach(ctx, execIDResp.ID, container.ExecAttachOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("op: %s, err: %w", op, err)
-	}
-	defer attachResp.Close()
-
-	data, err := io.ReadAll(attachResp.Reader)
+	data, _, err := w.execCommandWithLogs(containerId, execConfig)
 	if err != nil {
 		return nil, fmt.Errorf("op: %s, err: %w", op, err)
 	}

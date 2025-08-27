@@ -268,23 +268,23 @@ func (s *Storage) GetPipelineInfo(id int64) (*PipelinesTable, error) {
 		return nil, fmt.Errorf("op: %s, err: %w", op, ErrNotFound)
 	}
 
-	var pipeline *PipelinesTable
+	var pipeline PipelinesTable
 	if err := row.Scan(&pipeline.Repository, &pipeline.Branch, &pipeline.Commit); err != nil {
 		return nil, fmt.Errorf("op: %s, err: %w", op, err)
 	}
 
-	return pipeline, nil
+	return &pipeline, nil
 }
 
 func (s *Storage) CreateLog(logTable LogsTable) error {
 	const op = `storage.CreateLog`
 
-	query := `INSERT INTO logs(pipeline_fk_id, command_number, command, result, final_status) VALUES ($1, $2, $3, $4, $5);`
+	query := `INSERT INTO logs(pipeline_fk_id, command_name, command_number, command, results, final_status) VALUES ($1, $2, $3, $4, $5, &6);`
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	_, err := s.Db.ExecContext(ctx, query, logTable.PipelineId, logTable.CommandNumber, logTable.Command, logTable.Results, logTable.FinalStatus)
+	_, err := s.Db.ExecContext(ctx, query, logTable.PipelineId, logTable.CommandName, logTable.CommandNumber, logTable.Command, logTable.Results, logTable.FinalStatus)
 	if err != nil {
 		return fmt.Errorf("op: %s, err: %w", op, err)
 	}
