@@ -279,7 +279,7 @@ func (s *Storage) GetPipelineInfo(id int64) (*PipelinesTable, error) {
 func (s *Storage) CreateLog(logTable LogsTable) error {
 	const op = `storage.CreateLog`
 
-	query := `INSERT INTO logs(pipeline_fk_id, command_name, command_number, command, results, final_status) VALUES ($1, $2, $3, $4, $5, &6);`
+	query := `INSERT INTO logs(pipeline_fk_id, command_name, command_number, command, results, final_status) VALUES ($1, $2, $3, $4, $5, $6);`
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

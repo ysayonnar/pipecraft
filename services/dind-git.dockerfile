@@ -1,4 +1,4 @@
-FROM alpine
+FROM docker:stable-dind
 
 WORKDIR /workspace
 

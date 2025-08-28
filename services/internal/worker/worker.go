@@ -22,6 +22,7 @@ const (
 	LISTEN_INTERVAL = 10
 
 	DEFAULT_CI_CONFIG_PATH = "/workspace/ci.yaml"
+	DIND_GIT_IMAGE_NAME    = "dind-git"
 )
 
 type Worker struct {
@@ -81,12 +82,11 @@ func (w *Worker) Run() {
 
 	defer func() { w.done <- true }()
 
-	//TODO: нужен dind
 	ctx := context.Background()
 	resp, err := w.dockerClient.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image:      "alpine-git",
+			Image:      DIND_GIT_IMAGE_NAME,
 			WorkingDir: "/workspace",
 			Cmd:        []string{"sleep", "infinity"},
 		},
@@ -117,12 +117,13 @@ func (w *Worker) Run() {
 		return
 	}
 
-	defer func() {
-		err = w.cleanupContainer(resp.ID)
-		if err != nil {
-			slog.Warn("failed to stop container", logger.Err(err))
-		}
-	}()
+	//TODO: убрать комменты
+	//defer func() {
+	//	err = w.cleanupContainer(resp.ID)
+	//	if err != nil {
+	//		slog.Warn("failed to stop container", logger.Err(err))
+	//	}
+	//}()
 
 	pipelineInfo, err := w.storage.GetPipelineInfo(w.pipelineId)
 	if err != nil {
@@ -155,8 +156,6 @@ func (w *Worker) Run() {
 		}
 		return
 	}
-
-	slog.Debug("jobs", jobs)
 
 	for jobNumber, job := range jobs {
 		for _, step := range job.Steps {
@@ -211,13 +210,13 @@ func (w *Worker) Run() {
 		}
 	}
 
+	// TODO: созданные юзером контейнеры надо тоже как то закрывать
+
 	err = w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_COMPLETED)
 	if err != nil {
 		slog.Error("error while updating pipeline status", logger.Err(err))
 		return
 	}
-
-	// TODO: c вольюмами что то придумать чтобы cd работал
 }
 
 func (w *Worker) cloneRepository(containerId, repository, branch, commit string) error {
@@ -301,6 +300,10 @@ func (w *Worker) execCommandWithLogs(containerId string, execOpts container.Exec
 	_, err = stdcopy.StdCopy(&outBuf, &errBuf, attachResp.Reader)
 	if err != nil {
 		return nil, 0, fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	if errBuf.Len() != 0 {
+		return errBuf.Bytes(), exitCode, nil
 	}
 
 	return outBuf.Bytes(), exitCode, nil

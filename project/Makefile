@@ -1,5 +1,5 @@
 build_alpine_git:
-	docker build -t alpine-git -f ../services/alpine-git.dockerfile .
+	docker build -t dind-git -f ../services/dind-git.dockerfile .
 
 up:
 	$(MAKE) build_alpine_git

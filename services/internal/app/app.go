@@ -44,7 +44,6 @@ func (app *App) Run() {
 
 	slog.Info("Graceful shutdown application...", slog.String("signal", sign.String()))
 
-	//TODO: проверять, есть ли не закрытые контейнеры
 	redisService.Close()
 	storage.Db.Close()
 }
