@@ -209,8 +209,6 @@ func (w *Worker) Run() {
 		}
 	}
 
-	// TODO: созданные юзером контейнеры надо тоже как то закрывать
-
 	err = w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_COMPLETED)
 	if err != nil {
 		slog.Error("error while updating pipeline status", logger.Err(err))
@@ -222,7 +220,7 @@ func (w *Worker) cloneRepository(containerId, repository, branch, commit string)
 	const op = `worker.cloneRepository`
 
 	execConfig1 := container.ExecOptions{
-		Cmd: []string{"git", "clone", "--depth", "1", "--branch", branch, "--single-branch", repository, "/workspace"},
+		Cmd: []string{"git", "clone", "--branch", branch, "--single-branch", repository, "/workspace"},
 	}
 
 	execConfig2 := container.ExecOptions{
@@ -236,8 +234,13 @@ func (w *Worker) cloneRepository(containerId, repository, branch, commit string)
 	}
 
 	logs, exitCode, err = w.execCommandWithLogs(containerId, execConfig2)
-	if err != nil || exitCode != 0 {
-		slog.Error("error while cloning repository", logger.Err(err), slog.String("logs", string(logs)), slog.Int("exitCode", exitCode))
+	if err != nil {
+		slog.Error("error while cloning repository", logger.Err(err))
+		return fmt.Errorf("op: %s, err: %w", op, err)
+	}
+
+	if exitCode != 0 {
+		slog.Error("error while changinh to commit", slog.Int("exitCode", exitCode))
 		return fmt.Errorf("op: %s, err: %w", op, err)
 	}
 
