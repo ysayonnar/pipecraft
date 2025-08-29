@@ -117,13 +117,12 @@ func (w *Worker) Run() {
 		return
 	}
 
-	//TODO: убрать комменты
-	//defer func() {
-	//	err = w.cleanupContainer(resp.ID)
-	//	if err != nil {
-	//		slog.Warn("failed to stop container", logger.Err(err))
-	//	}
-	//}()
+	defer func() {
+		err = w.cleanupContainer(resp.ID)
+		if err != nil {
+			slog.Warn("failed to stop container", logger.Err(err))
+		}
+	}()
 
 	pipelineInfo, err := w.storage.GetPipelineInfo(w.pipelineId)
 	if err != nil {
