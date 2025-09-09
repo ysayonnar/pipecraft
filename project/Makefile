@@ -20,3 +20,6 @@ restart:
 
 restart_logs:
 	docker compose down && docker compose up --build
+
+test:
+	go test -C ../services/internal ./handlers

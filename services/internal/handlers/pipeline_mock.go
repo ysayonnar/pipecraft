@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"pipecraft/internal/models"
 	"pipecraft/internal/services"
 	"pipecraft/internal/storage"
@@ -86,4 +87,22 @@ func (m MockPipelineService) GetLogs(id int64) (*models.PipelineLogsResponse, er
 	}
 
 	return nil, services.ErrNotFound
+}
+
+type ErrorMockPipelineService struct{}
+
+func NewErrorMockPipelineService() *ErrorMockPipelineService {
+	return &ErrorMockPipelineService{}
+}
+
+func (m ErrorMockPipelineService) GetStatus(id int64) (*models.PipelineStatusResponse, error) {
+	return nil, errors.New("mock error")
+}
+
+func (m ErrorMockPipelineService) GetLogs(id int64) (*models.PipelineLogsResponse, error) {
+	return nil, errors.New("mock error")
+}
+
+func (m ErrorMockPipelineService) Run(dto *models.RunPipelineRequest) (*models.RunPipelineResponse, error) {
+	return nil, errors.New("mock error")
 }

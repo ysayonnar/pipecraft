@@ -52,7 +52,6 @@ func (h *Handlers) RunPipeline(w http.ResponseWriter, r *http.Request) {
 	var dto models.RunPipelineRequest
 	err = json.Unmarshal(jsonData, &dto)
 	if err != nil {
-		slog.Error("error while parsing json", logger.Err(err))
 		errorResponse := models.ErrorResponse{Error: "invalid json"}
 		writeJson(errorResponse, w, http.StatusBadRequest)
 		return
