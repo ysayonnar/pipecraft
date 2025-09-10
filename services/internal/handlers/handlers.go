@@ -82,7 +82,7 @@ func (h *Handlers) PipelineStatus(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	strPipelineId, ok := params["id"]
 	if !ok {
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/alicebob/miniredis/v2"
@@ -43,6 +44,10 @@ func (m MockRedisService) SetPipelineLogs(id int64, data string) {
 func (m MockRedisService) GetPipelineStatus(id int64) string {
 	key, err := m.client.Get(fmt.Sprintf("status:%d", id))
 	if err != nil {
+		if errors.Is(err, miniredis.ErrKeyNotFound) {
+			return ""
+		}
+
 		panic(err)
 	}
 
@@ -52,6 +57,10 @@ func (m MockRedisService) GetPipelineStatus(id int64) string {
 func (m MockRedisService) GetPipelineLogs(id int64) string {
 	key, err := m.client.Get(fmt.Sprintf("logs:%d", id))
 	if err != nil {
+		if errors.Is(err, miniredis.ErrKeyNotFound) {
+			return ""
+		}
+
 		panic(err)
 	}
 
