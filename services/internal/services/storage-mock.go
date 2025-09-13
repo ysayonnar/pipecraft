@@ -12,6 +12,15 @@ type StorageMock struct {
 	lastLogId      int64
 }
 
+func NewStorageMock() *StorageMock {
+	return &StorageMock{
+		pipelines:      make(map[int64]*storage.PipelinesTable),
+		logs:           make(map[int64]*storage.LogsTable),
+		lastPipelineId: 0,
+		lastLogId:      0,
+	}
+}
+
 func (s StorageMock) CreatePipeline(repository, branch, commit string) (int64, error) {
 	for id, pipeline := range s.pipelines {
 		if pipeline.Repository == repository && pipeline.Commit == commit && pipeline.Branch == branch {

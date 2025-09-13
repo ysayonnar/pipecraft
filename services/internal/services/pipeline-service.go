@@ -34,7 +34,7 @@ func (s *PipelineService) Run(dto *models.RunPipelineRequest) (*models.RunPipeli
 		if errors.Is(err, storage.ErrPipelineAlreadyExists) {
 			return &models.RunPipelineResponse{PipelineId: pipelineId}, ErrAlreadyExists
 		}
-		return nil, fmt.Errorf(`%s: %w`, err, op)
+		return nil, fmt.Errorf(`%s: %w`, op, err)
 	}
 
 	return &models.RunPipelineResponse{PipelineId: pipelineId}, nil
