@@ -13,10 +13,16 @@ var (
 )
 
 type PipelineService struct {
-	Storage *storage.Storage
+	Storage Storage
 }
 
-func NewPipelineService(s *storage.Storage) *PipelineService {
+type Storage interface {
+	CreatePipeline(repository, branch, commit string) (int64, error)
+	GetPipelineStatus(id int64) (string, error)
+	GetPipelineLogs(id int64) ([]*storage.LogsTable, error)
+}
+
+func NewPipelineService(s Storage) *PipelineService {
 	return &PipelineService{Storage: s}
 }
 
