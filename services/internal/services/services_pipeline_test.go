@@ -60,3 +60,49 @@ func Test_PipelineService_Status_HappyPath(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound)
 	require.Nil(t, statusResponse)
 }
+
+func Test_PipelineService_Logs_HappyPath(t *testing.T) {
+	s := NewSuite()
+
+	requestDto := models.RunPipelineRequest{
+		RepositoryUrl: "repo",
+		Branch:        "branch",
+		Commit:        "commit",
+	}
+
+	runResponse, err := s.pipelineService.Run(&requestDto)
+	require.NoError(t, err)
+	require.Equal(t, runResponse.PipelineId, int64(1))
+
+	logsResponse, err := s.pipelineService.GetLogs(runResponse.PipelineId)
+	require.NoError(t, err)
+	require.NotNil(t, logsResponse)
+
+	logsResponse, err = s.pipelineService.GetLogs(int64(-1))
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrNotFound)
+	require.Nil(t, logsResponse)
+}
+
+func Test_PipelineService_Error(t *testing.T) {
+	s := NewErrorStorageMock()
+	p := NewPipelineService(s)
+
+	requestDto := models.RunPipelineRequest{
+		RepositoryUrl: "repo",
+		Branch:        "branch",
+		Commit:        "commit",
+	}
+
+	runResponse, err := p.Run(&requestDto)
+	require.Error(t, err)
+	require.Nil(t, runResponse)
+
+	logsResponse, err := p.GetLogs(int64(1))
+	require.Error(t, err)
+	require.Nil(t, logsResponse)
+
+	statusResponse, err := p.GetStatus(int64(1))
+	require.Error(t, err)
+	require.Nil(t, statusResponse)
+}

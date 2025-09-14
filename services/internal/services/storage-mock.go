@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"pipecraft/internal/storage"
 	"time"
 )
@@ -75,4 +76,22 @@ func (s StorageMock) GetPipelineLogs(id int64) ([]*storage.LogsTable, error) {
 	}
 
 	return nil, storage.ErrNotFound
+}
+
+type ErrorStorageMock struct{}
+
+func NewErrorStorageMock() *ErrorStorageMock {
+	return &ErrorStorageMock{}
+}
+
+func (e ErrorStorageMock) CreatePipeline(repository, branch, commit string) (int64, error) {
+	return 0, errors.New("mocked error")
+}
+
+func (e ErrorStorageMock) GetPipelineStatus(id int64) (string, error) {
+	return "", errors.New("mocked error")
+}
+
+func (e ErrorStorageMock) GetPipelineLogs(id int64) ([]*storage.LogsTable, error) {
+	return nil, errors.New("mocked error")
 }
