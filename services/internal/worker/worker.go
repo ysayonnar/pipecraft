@@ -35,8 +35,6 @@ type Worker struct {
 func StartListener(s *storage.Storage) {
 	workerPool := make(chan struct{}, MAX_WORKERS)
 
-	// TODO: почему то запускается несколько воркеров
-
 	for {
 		pipelineId, err := s.GetLastWaitingPipeline()
 		if err != nil {
@@ -137,7 +135,7 @@ func (w *Worker) Run() {
 	// cloning repository
 	err = w.cloneRepository(resp.ID, pipelineInfo.Repository, pipelineInfo.Branch, pipelineInfo.Commit)
 	if err != nil {
-		slog.Error("error while cloning repository", logger.Err(err))
+		slog.Warn("error while cloning repository or commit doesn't exist", logger.Err(err))
 		err := w.storage.UpdatePipelineStatus(w.pipelineId, storage.PIPELINE_STATUS_ABORTED)
 		if err != nil {
 			slog.Error("error while updating pipeline status", logger.Err(err))
@@ -240,8 +238,7 @@ func (w *Worker) cloneRepository(containerId, repository, branch, commit string)
 	}
 
 	if exitCode != 0 {
-		slog.Error("error while changinh to commit", slog.Int("exitCode", exitCode))
-		return fmt.Errorf("op: %s, err: %w", op, err)
+		return fmt.Errorf("op: %s, err: %w", op, errors.New(fmt.Sprintf("exit code: %d", exitCode)))
 	}
 
 	return nil

@@ -1,11 +1,16 @@
+test:
+	go test -C ../services/internal ./handlers ./services -v
+
 build_alpine_git:
 	docker build -t dind-git -f ../services/dind-git.dockerfile .
 
 up:
+	$(MAKE) test
 	$(MAKE) build_alpine_git
 	docker compose up --build -d
 
 up_logs:
+	$(MAKE) test
 	$(MAKE) build_alpine_git
 	docker compose up --build
 
@@ -20,6 +25,3 @@ restart:
 
 restart_logs:
 	docker compose down && docker compose up --build
-
-test:
-	go test -C ../services/internal ./handlers ./services -v
