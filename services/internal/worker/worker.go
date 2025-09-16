@@ -226,9 +226,13 @@ func (w *Worker) cloneRepository(containerId, repository, branch, commit string)
 	}
 
 	logs, exitCode, err := w.execCommandWithLogs(containerId, execConfig1)
-	if err != nil || exitCode != 0 {
+	if err != nil {
 		slog.Error("error while cloning repository", logger.Err(err), slog.String("logs", string(logs)), slog.Int("exitCode", exitCode))
 		return fmt.Errorf("op: %s, err: %w", op, err)
+	}
+	if exitCode != 0 {
+		slog.Error("error while cloning repository", slog.Int("exit_code", exitCode), slog.String("logs", string(logs)), slog.Int("exitCode", exitCode))
+		return fmt.Errorf("op: %s, err: %w", op, errors.New(fmt.Sprintf("exitCode: %d", exitCode)))
 	}
 
 	logs, exitCode, err = w.execCommandWithLogs(containerId, execConfig2)
